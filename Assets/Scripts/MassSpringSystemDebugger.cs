@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿//jeeda
+using UnityEngine;
 using System.Collections.Generic;
 
 // Attach this to an empty GameObject, assign a small sphere prefab to massPointPrefab.
@@ -525,3 +526,37 @@ public class MassSpringSystemDebugger : MonoBehaviour
         }
     }
 }
+////taghreed
+//using UnityEngine;
+//using System.Collections.Generic;
+
+//public class MassSpringSystemDebugger : MonoBehaviour
+//{
+//    public Color springColor = Color.yellow;
+//    private List<LineRenderer> lines = new List<LineRenderer>();
+
+//    void OnDrawGizmos()
+//    {
+//        var builder = GetComponent<MassSpringMeshBuilder>();
+//        if (builder == null) return;
+
+//        Gizmos.color = springColor;
+
+//        var mesh = GetComponent<MeshFilter>().sharedMesh;
+//        if (mesh == null) return;
+
+//        Vector3[] vertices = mesh.vertices;
+//        int[] triangles = mesh.triangles;
+
+//        for (int i = 0; i < triangles.Length; i += 3)
+//        {
+//            Vector3 a = transform.TransformPoint(vertices[triangles[i]]);
+//            Vector3 b = transform.TransformPoint(vertices[triangles[i + 1]]);
+//            Vector3 c = transform.TransformPoint(vertices[triangles[i + 2]]);
+
+//            Gizmos.DrawLine(a, b);
+//            Gizmos.DrawLine(b, c);
+//            Gizmos.DrawLine(c, a);
+//        }
+//    }  
+//}
