@@ -1,0 +1,73 @@
+﻿// VoxelFill.compute
+
+#pragma kernel InitVoxels
+#pragma kernel FillVoxels
+#pragma kernel BuildSprings
+
+StructuredBuffer<float3>       _VertexBuffer;
+StructuredBuffer<int>          _IndexBuffer;
+RWStructuredBuffer<float3>     _VoxelCenters;
+RWStructuredBuffer<uint>       _OccupancyGrid;
+AppendStructuredBuffer<float3> _OccupiedVoxels;
+
+struct SpringData {
+    uint  p1;
+    uint  p2;
+    float restLength;
+};
+AppendStructuredBuffer<SpringData> _Springs;
+
+int3    _GridRes;
+float   _VoxelSize;
+float4x4 _ObjectToWorld;
+
+// 1) initialize grid
+[numthreads(8,8,8)]
+void InitVoxels(uint3 id : SV_DispatchThreadID) {
+    if (any(id >= _GridRes)) return;
+    uint idx = id.x + _GridRes.x*(id.y + _GridRes.y*id.z);
+    float3 local = (id + 0.5) * _VoxelSize - (_GridRes.xyz - 1) * 0.5 * _VoxelSize;
+    float3 world = mul(_ObjectToWorld, float4(local,1)).xyz;
+    _VoxelCenters[idx] = world;
+    _OccupancyGrid[idx] = 0;
+}
+
+// 2) fill inside/outside by simple ray‐cast along +Y
+[numthreads(8,8,8)]
+void FillVoxels(uint3 id : SV_DispatchThreadID) {
+    if (any(id >= _GridRes)) return;
+    uint idx = id.x + _GridRes.x*(id.y + _GridRes.y*id.z);
+    int hits = RayIntersectTriangles(_VoxelCenters[idx], float3(0,1,0));
+    if ((hits & 1) != 0) {
+        _OccupancyGrid[idx] = 1;
+        _OccupiedVoxels.Append(_VoxelCenters[idx]);
+    }
+}
+
+// 3) connect each occupied voxel to its 6-axis neighbors
+[numthreads(8,8,8)]
+void BuildSprings(uint3 id : SV_DispatchThreadID) {
+    if (any(id >= _GridRes)) return;
+    uint idx = id.x + _GridRes.x*(id.y + _GridRes.y*id.z);
+    if (_OccupancyGrid[idx] == 0) return;
+
+    uint3 dirs[6] = {
+        uint3( 1,0,0), uint3(-1,0,0),
+        uint3(0, 1,0), uint3(0,-1,0),
+        uint3(0, 0,1), uint3(0, 0,-1),
+    };
+
+    for (int d = 0; d < 6; ++d) {
+        uint3 nb = id + dirs[d];
+        if (all(nb < _GridRes)) {
+            uint nidx = nb.x + _GridRes.x*(nb.y + _GridRes.y*nb.z);
+            if (_OccupancyGrid[nidx] == 1) {
+                SpringData s;
+                s.p1 = idx;
+                s.p2 = nidx;
+                s.restLength = _VoxelSize;
+                _Springs.Append(s);
+            }
+        }  
+    }
+}

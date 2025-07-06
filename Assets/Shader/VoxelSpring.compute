@@ -1,0 +1,89 @@
+#pragma kernel InitVoxels
+#pragma kernel BuildSprings
+#pragma kernel Simulate
+#include "UnityCG.cginc"
+
+#define MAX_NEIGHBORS 27  // 6 (structural), 12 (shear), 8 (bending) if needed
+
+// Configurable from C#
+int3 voxelGridSize;
+float voxelSpacing;
+int materialType; // 0 = Slimy, 1 = Rubber, 2 = Solid
+
+// Append buffers
+AppendStructuredBuffer<float3> voxelPositions;
+AppendStructuredBuffer<int2> springs; // indexA, indexB
+
+// Simulation buffers
+RWStructuredBuffer<float3> positions;
+RWStructuredBuffer<float3> velocities;
+
+// Constants
+float springStrength;
+float damping;
+float deltaTime;
+
+[numthreads(8, 8, 8)]
+void InitVoxels(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= voxelGridSize.x || id.y >= voxelGridSize.y || id.z >= voxelGridSize.z) return;
+
+    float3 pos = (id * voxelSpacing);
+    voxelPositions.Append(pos);
+}
+
+[numthreads(64, 1, 1)]
+void BuildSprings(uint id : SV_DispatchThreadID)
+{
+    if (id >= voxelPositions.Count) return;
+
+    float3 posA = voxelPositions[id];
+
+    // We'll add structural neighbors (±1 in x/y/z)
+    for (int dx = -1; dx <= 1; dx++)
+    for (int dy = -1; dy <= 1; dy++)
+    for (int dz = -1; dz <= 1; dz++)
+    {
+        if (dx == 0 && dy == 0 && dz == 0) continue;
+
+        int connectionType = abs(dx) + abs(dy) + abs(dz);
+
+        // material-based rules
+        bool allow = false;
+        if (materialType == 2) allow = true;                         // Solid: all
+        else if (materialType == 1 && connectionType <= 2) allow = true;  // Rubber: structural + shear
+        else if (materialType == 0 && connectionType == 1) allow = true;  // Slimy: structural only
+
+        if (!allow) continue;
+
+        uint3 neighborIndex = uint3(posA / voxelSpacing) + uint3(dx, dy, dz);
+        if (neighborIndex.x >= voxelGridSize.x || neighborIndex.y >= voxelGridSize.y || neighborIndex.z >= voxelGridSize.z) continue;
+
+        int neighborId = neighborIndex.x + voxelGridSize.x * (neighborIndex.y + voxelGridSize.y * neighborIndex.z);
+        if (neighborId < voxelPositions.Count)
+        {
+            springs.Append(int2(id, neighborId));
+        }
+    }
+}
+
+[numthreads(64, 1, 1)]
+void Simulate(uint id : SV_DispatchThreadID)
+{
+    if (id >= positions.Count) return;
+
+    float3 velocity = velocities[id];
+    float3 position = positions[id];
+
+    velocity += float3(0, -9.81, 0) * deltaTime;
+
+    // Apply spring forces (simplified; ideally needs neighbor list)
+    // For simplicity, not implemented yet here.
+
+    velocity *= (1.0f - damping * deltaTime);
+
+    position += velocity * deltaTime;
+
+    positions[id] = position;
+    velocities[id] = velocity;
+}
