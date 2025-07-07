@@ -429,7 +429,7 @@ public class UnifiedMassSpringSystem : MonoBehaviour
             indexToPoint[i] = pointMap[local];
         }
 
-        // Create springs
+        // Create structural springs
         HashSet<(MassPoint, MassPoint)> connected = new();
 
         for (int i = 0; i < originalTriangles.Length; i += 3)
@@ -438,19 +438,18 @@ public class UnifiedMassSpringSystem : MonoBehaviour
             MassPoint b = indexToPoint[originalTriangles[i + 1]];
             MassPoint c = indexToPoint[originalTriangles[i + 2]];
 
-            // Structural springs (triangle edges)
             TryAddSpring(a, b, structuralColor, connected);
             TryAddSpring(b, c, structuralColor, connected);
             TryAddSpring(c, a, structuralColor, connected);
-
-            // Shear springs (face diagonals)
-            if (enableShearRuntime)
-            {
-                AddShearSprings(indexToPoint, originalTriangles, connected);
-            }
         }
 
-        // Bending springs (connect vertices that are two edges apart)
+        //Add shear once after all triangles processed
+        if (enableShearRuntime)
+        {
+            AddShearSprings(indexToPoint, originalTriangles, connected);
+        }
+
+        // Bending
         if (enableBendingRuntime)
         {
             CreateBendingSprings(connected);
@@ -503,9 +502,18 @@ public class UnifiedMassSpringSystem : MonoBehaviour
             }
         }
     }
+//indexToPoint: خارطة من إندكس كل رأس إلى الكائن الفيزيائي MassPoint
+
+//triangles: مصفوفة تمثل كل مثلث(كل 3 أرقام يمثلوا مثلث)
+
+//connected: مجموعة من النوابض المضافة بالفعل(لمنع التكرار)
+
     void AddShearSprings(Dictionary<int, MassPoint> indexToPoint, int[] triangles, HashSet<(MassPoint, MassPoint)> connected)
     {
-        // بناء خريطة الحواف
+        //        نشئ قاموس يخزن:
+        //        كل ضلع(كـ زوج رؤوس)
+        //وقائمة بالمثلثات التي تستخدم هذا الضلع
+        //نعرف مين المثلثات يلي بتشارك نفس الضلع
         Dictionary<(int, int), List<int>> edgeToTriangles = new();
 
         for (int i = 0; i < triangles.Length; i += 3)
