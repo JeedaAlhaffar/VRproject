@@ -36,6 +36,7 @@ public class UnifiedMassSpringSystem : MonoBehaviour
     public Color structuralColor = Color.yellow;
     public Color shearColor = Color.green;
     public Color bendingColor = Color.red;
+    public Color couplingColor = Color.blue;
 
     [Header("Debug")]
     [Tooltip("How many FixedUpdate frames to wait between printing COM/spring diagnostics.")]
@@ -44,6 +45,8 @@ public class UnifiedMassSpringSystem : MonoBehaviour
 
     [Header("References")]
     public GameObject massPointPrefab;
+    [Header("Fill Settings")]
+    [Range(4, 32)] public int fillResolution = 8;
 
     private List<MassPoint> points = new();
     private List<Spring> springs = new();
@@ -61,6 +64,10 @@ public class UnifiedMassSpringSystem : MonoBehaviour
     private float constraintStiffness;
     private bool useCOMClamping;
     private float rotationalDamping;
+    private Mesh mesh;
+    private Vector3[] localVerts;
+    private int[] tris;
+    private Vector3 voxelStep;
 
     // For debugging and material change detection
     private int frameCounter = 0;
@@ -72,25 +79,203 @@ public class UnifiedMassSpringSystem : MonoBehaviour
     private Vector3[] originalVertices;
     private int[] originalTriangles;
 
-    void Start()
+    void Awake()
     {
         cam = Camera.main;
-        var renderer = GetComponent<MeshRenderer>();
-        if (renderer) renderer.enabled = false;
+        mesh = GetComponent<MeshFilter>().mesh;
+        localVerts = mesh.vertices;
+        tris = mesh.triangles;
+        Debug.Log("Vertex count: " + localVerts.Length);
 
-        // Store original mesh data
-        Mesh mesh = GetComponent<MeshFilter>().mesh;
-        originalVertices = mesh.vertices;
-        originalTriangles = mesh.triangles;
 
+    }
+    //void Start()
+    //{
+    //    cam = Camera.main;
+    //    var renderer = GetComponent<MeshRenderer>();
+    //    if (renderer) renderer.enabled = false;
+
+    //    // Store original mesh data
+    //    Mesh mesh = GetComponent<MeshFilter>().mesh;
+    //    originalVertices = mesh.vertices;
+    //    originalTriangles = mesh.triangles;
+
+    //    lastMaterial = material;
+    //    lastEnableShear = enableShear;
+    //    lastEnableBending = enableBending;
+
+    //    ApplyMaterialSettings();
+    //    BuildMassSpringFromMesh();
+    //}
+
+    void Start()
+    {
         lastMaterial = material;
         lastEnableShear = enableShear;
         lastEnableBending = enableBending;
+        // disable original visual
+        var r = GetComponent<MeshRenderer>();
+        if (r) r.enabled = false;
 
+        // apply material
         ApplyMaterialSettings();
-        BuildMassSpringFromMesh();
+        //BuildMassSpringFromMesh();
+
+        // build all mass points + springs
+        BuildSurface();
+        BuildInterior();
+        BuildAllSprings();
+        Debug.Log("Vertex count1: " + localVerts.Length);
+
+    }
+    void BuildSurface()
+    {
+        // one mass point per vertex, **localPosition** so they move with mesh
+        foreach (var v in localVerts)
+        {
+            var go = Instantiate(massPointPrefab, Vector3.zero, Quaternion.identity, transform);
+            go.transform.localPosition = v;
+            points.Add(new MassPoint(go.transform, v));
+        }
     }
 
+    void BuildInterior()
+    {
+        var bounds = mesh.bounds;
+        // compute world‐space voxel step
+        Vector3 minW = transform.TransformPoint(bounds.min);
+        Vector3 maxW = transform.TransformPoint(bounds.max);
+        voxelStep = (maxW - minW) / fillResolution;
+
+        // sample interior
+        for (int x = 0; x < fillResolution; x++)
+            for (int y = 0; y < fillResolution; y++)
+                for (int z = 0; z < fillResolution; z++)
+                {
+                    Vector3 wC = minW + new Vector3(
+                        (x + .5f) * voxelStep.x, (y + .5f) * voxelStep.y, (z + .5f) * voxelStep.z
+                    );
+                    if (!PointInside(wC)) continue;
+
+                    // spawn in **local** coords
+                    Vector3 lC = transform.InverseTransformPoint(wC);
+                    var go = Instantiate(massPointPrefab, Vector3.zero, Quaternion.identity, transform);
+                    go.transform.localPosition = lC;
+                    points.Add(new MassPoint(go.transform, lC));
+                }
+    }
+    bool PointInside(Vector3 wP)
+    {
+        // ray‐cast up
+        var r = new Ray(wP, Vector3.up);
+        int hits = 0;
+        for (int i = 0; i < tris.Length; i += 3)
+        {
+            Vector3 A = transform.TransformPoint(localVerts[tris[i]]);
+            Vector3 B = transform.TransformPoint(localVerts[tris[i + 1]]);
+            Vector3 C = transform.TransformPoint(localVerts[tris[i + 2]]);
+            if (RayTri(r, A, B, C)) hits++;
+        }
+        return (hits & 1) == 1;
+    }
+
+    static bool RayTri(Ray ray, Vector3 a, Vector3 b, Vector3 c)
+    {
+        const float EPS = 1e-6f;
+        var e1 = b - a; var e2 = c - a;
+        var P = Vector3.Cross(ray.direction, e2);
+        var det = Vector3.Dot(e1, P);
+        if (Mathf.Abs(det) < EPS) return false;
+        var inv = 1f / det;
+        var T = ray.origin - a;
+        var u = Vector3.Dot(T, P) * inv;
+        if (u < 0 || u > 1) return false;
+        var Q = Vector3.Cross(T, e1);
+        var v = Vector3.Dot(ray.direction, Q) * inv;
+        if (v < 0 || u + v > 1) return false;
+        var t = Vector3.Dot(e2, Q) * inv;
+        return t > EPS;
+    }
+    void AddSpring(MassPoint a, MassPoint b, Color col)
+    {
+        springs.Add(new Spring(a, b, col));
+    }
+
+    void BuildAllSprings()
+    {
+        var n = points.Count;
+        // surface–surface: along mesh triangles
+        // build index->masspoint for first localVerts.Length points
+        var surfMap = new MassPoint[localVerts.Length];
+        for (int i = 0; i < localVerts.Length; i++) surfMap[i] = points[i];
+        for (int i = 0; i < tris.Length; i += 3)
+        {
+            AddSpring(surfMap[tris[i + 0]], surfMap[tris[i + 1]], structuralColor);
+            AddSpring(surfMap[tris[i + 1]], surfMap[tris[i + 2]], structuralColor);
+            AddSpring(surfMap[tris[i + 2]], surfMap[tris[i + 0]], structuralColor);
+        }
+
+        // interior–interior: grid connectivity
+        int surfaceCount = localVerts.Length;
+        int interiorCount = n - surfaceCount;
+        // map interior to grid index
+        var grid = new Dictionary<Vector3Int, MassPoint>();
+        for (int i = surfaceCount; i < n; i++)
+        {
+            var mp = points[i];
+            var idx = new Vector3Int(
+                Mathf.FloorToInt(mp.restPosition.x / voxelStep.x),
+                Mathf.FloorToInt(mp.restPosition.y / voxelStep.y),
+                Mathf.FloorToInt(mp.restPosition.z / voxelStep.z)
+            );
+            grid[idx] = mp;
+        }
+        var offs = new[] { Vector3Int.right, Vector3Int.up, new Vector3Int(0, 0, 1) };
+        foreach (var kv in grid)
+            foreach (var d in offs)
+                if (grid.TryGetValue(kv.Key + d, out var nb))
+                    AddSpring(kv.Value, nb, shearColor);
+
+        // coupling: each surface to nearest interior
+        float maxd = voxelStep.magnitude * 2f, maxd2 = maxd * maxd;
+        for (int i = 0; i < surfaceCount; i++)
+        {
+            var s = points[i];
+            MassPoint best = null; float bd = maxd2;
+            Vector3 sw = s.transform.position;
+            for (int j = surfaceCount; j < n; j++)
+            {
+                var ip = points[j];
+                float d2 = (sw - ip.transform.position).sqrMagnitude;
+                if (d2 < bd) { bd = d2; best = ip; }
+            }
+            if (best != null) AddSpring(s, best, couplingColor);
+        }
+        // right after your structural springs loop in BuildAllSprings():
+        if (enableBendingRuntime)
+        {
+            var surfAdj = new Dictionary<MassPoint, HashSet<MassPoint>>();
+            // build adjacency from structural (yellow) springs
+            foreach (var s in springs)
+            {
+                if (s.color != structuralColor) continue;
+                if (!surfAdj.ContainsKey(s.p1)) surfAdj[s.p1] = new HashSet<MassPoint>();
+                if (!surfAdj.ContainsKey(s.p2)) surfAdj[s.p2] = new HashSet<MassPoint>();
+                surfAdj[s.p1].Add(s.p2);
+                surfAdj[s.p2].Add(s.p1);
+            }
+            // connect two‑hop neighbors
+            foreach (var kv in surfAdj)
+            {
+                var center = kv.Key;
+                foreach (var mid in kv.Value)
+                    foreach (var end in surfAdj[mid])
+                        if (end != center && !surfAdj[center].Contains(end))
+                            AddSpring(center, end, bendingColor);
+            }
+        }
+
+    }
     void Update()
     {
         // Check if material settings have changed
@@ -167,7 +352,7 @@ public class UnifiedMassSpringSystem : MonoBehaviour
                 enableBendingRuntime = false;
                 constraintIterations = 1;
                 constraintStiffness = 0.1f;
-                useCOMClamping = false;
+                useCOMClamping = true;
                 rotationalDamping = 0.05f;
                 break;
 
@@ -180,7 +365,7 @@ public class UnifiedMassSpringSystem : MonoBehaviour
                 enableBendingRuntime = false;
                 constraintIterations = 2;
                 constraintStiffness = 0.5f;
-                useCOMClamping = false;
+                useCOMClamping = true;
                 rotationalDamping = 0.1f;
                 break;
 
@@ -227,8 +412,8 @@ public class UnifiedMassSpringSystem : MonoBehaviour
         frameCounter++;
 
         // 1) Apply gravity
-        //foreach (var p in points)
-        //    p.velocity += gravity * dt;
+        foreach (var p in points)
+            p.velocity += gravity * dt;
 
         // 2) Apply spring forces
         foreach (var spring in springs)
@@ -337,6 +522,18 @@ public class UnifiedMassSpringSystem : MonoBehaviour
             }
         }
     }
+    public void ApplyImpactForce(Vector3 contactPoint, Vector3 force)
+    {
+        Debug.Log($"💥 ApplyImpactForce called! Point: {contactPoint}, Force: {force}");
+
+        foreach (var p in points)
+        {
+            float dist = Vector3.Distance(p.transform.position, contactPoint);
+            float weight = Mathf.Clamp01(1f - dist);
+            p.velocity += force * weight;
+        }
+    }
+
 
     void ApplyRotationalDamping(float dt)
     {
@@ -636,4 +833,19 @@ public class UnifiedMassSpringSystem : MonoBehaviour
             p2.velocity -= force * dt;
         }
     }
+
+
+    // تابع LateUpdate هنا
+    void LateUpdate()
+    {
+        if (points == null || points.Count == 0) return;
+
+        Vector3 center = Vector3.zero;
+        foreach (var p in points)
+            center += p.transform.position;
+
+        center /= points.Count;
+        transform.position = center;
+    }
+
 }

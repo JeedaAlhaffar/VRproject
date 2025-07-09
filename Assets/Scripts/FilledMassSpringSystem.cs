@@ -18,7 +18,7 @@ public class FilledMassSpringSystem : MonoBehaviour
     public bool enableBending_Custom = false;
     public int constraintIterations_Custom = 2;
     public float constraintStiffness_Custom = 0.3f;
-    public bool useCOMClamping_Custom = false;
+    public bool useCOMClamping_Custom = true;
     public float rotationalDamping_Custom = 0.1f;
 
     [Header("Spring Toggles")]
@@ -360,7 +360,7 @@ public class FilledMassSpringSystem : MonoBehaviour
                 enableBendingRuntime = false;
                 constraintIterations = 1;
                 constraintStiffness = 0.1f;
-                useCOMClamping = false;
+                useCOMClamping = true;
                 rotationalDamping = 0.05f;
                 break;
 
@@ -373,7 +373,7 @@ public class FilledMassSpringSystem : MonoBehaviour
                 enableBendingRuntime = false;
                 constraintIterations = 2;
                 constraintStiffness = 0.5f;
-                useCOMClamping = false;
+                useCOMClamping = true;
                 rotationalDamping = 0.1f;
                 break;
 
@@ -420,8 +420,8 @@ public class FilledMassSpringSystem : MonoBehaviour
         frameCounter++;
 
         // 1) Apply gravity
-        //foreach (var p in points)
-        //    p.velocity += gravity * dt;
+        foreach (var p in points)
+            p.velocity += gravity * dt;
 
         // 2) Apply spring forces
         foreach (var spring in springs)
@@ -530,7 +530,15 @@ public class FilledMassSpringSystem : MonoBehaviour
             }
         }
     }
-
+    public void ApplyImpactForce(Vector3 contactPoint, Vector3 force)
+    {
+        foreach (var p in points)
+        {
+            float dist = Vector3.Distance(p.transform.position, contactPoint);
+            float weight = Mathf.Clamp01(1f - dist);
+            p.velocity += force * weight;
+        }
+    }
     void ApplyRotationalDamping(float dt)
     {
         Vector3 comPos = Vector3.zero;
