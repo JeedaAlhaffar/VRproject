@@ -5,18 +5,22 @@ using UnityEngine.UI;
 
 public class UIManager : MonoBehaviour
 {
-    public TMP_Text titleText1;         // "Select First Model:"
-    public TMP_Text titleText2;         // "Select Second Model:"
-    public TMP_Dropdown modelDropdown1; // أول Dropdown
-    public TMP_Dropdown modelDropdown2; // ثاني Dropdown
-    public Button startButton;          // زر بدء المحاكاة
+    public TMP_Text titleText1;          // "Select First Model:"
+    public TMP_Text titleText2;          // "Select Second Model:"
+    public TMP_Dropdown modelDropdown1;  // أول Dropdown
+    public TMP_Dropdown modelDropdown2;  // ثاني Dropdown
+    public Button startButton;           // زر بدء المحاكاة
+
+    // Static variables to share data with next scene
+    public static string selectedModelName1;
+    public static string selectedModelName2;
 
     void Start()
     {
         // تهيئة العناوين
         titleText1.text = "Select Model 1:";
         titleText2.text = "Select Model 2:";
-   
+
         // إضافة Listeners للتعامل مع التغييرات
         modelDropdown1.onValueChanged.AddListener(OnDropdown1Changed);
         modelDropdown2.onValueChanged.AddListener(OnDropdown2Changed);
@@ -27,22 +31,28 @@ public class UIManager : MonoBehaviour
 
     void OnDropdown1Changed(int index)
     {
-        string selectedModel = modelDropdown1.options[index].text;
-        Debug.Log("Selected first model: " + selectedModel);
-        // هنا تقدر تحمّل الموديل أو تحفظ الاختيار
+        selectedModelName1 = modelDropdown1.options[index].text;
+        Debug.Log("Selected first model: " + selectedModelName1);
     }
 
     void OnDropdown2Changed(int index)
     {
-        string selectedModel = modelDropdown2.options[index].text;
-        Debug.Log("Selected second model: " + selectedModel);
-        // هنا تقدر تحمّل الموديل أو تحفظ الاختيار
+        selectedModelName2 = modelDropdown2.options[index].text;
+        Debug.Log("Selected second model: " + selectedModelName2);
     }
 
     void OnStartButtonClicked()
     {
+        // حفظ آخر اختيار إذا ما تغيرت الـ Dropdowns بعد التشغيل
+        if (string.IsNullOrEmpty(selectedModelName1))
+            selectedModelName1 = modelDropdown1.options[modelDropdown1.value].text;
+        if (string.IsNullOrEmpty(selectedModelName2))
+            selectedModelName2 = modelDropdown2.options[modelDropdown2.value].text;
+
         Debug.Log("Simulation Started!");
-        // هنا تبدأ تشغيل المحاكاة
-        SceneManager.LoadScene("Assets/Scenes/Simulation.unity");
+        Debug.Log($"Models chosen: {selectedModelName1}, {selectedModelName2}");
+
+        // تحميل مشهد السيموليشن (يُفضل كتابة اسم المشهد فقط إذا ضايفه بـ Build Settings)
+        SceneManager.LoadScene("Simulation");
     }
 }

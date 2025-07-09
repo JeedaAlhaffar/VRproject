@@ -8,9 +8,9 @@ public class MassSpringPhysics : MonoBehaviour
     {
         float dt = Time.fixedDeltaTime;
 
-        // Apply gravity
-        foreach (var p in points)
-            p.velocity += gravity * dt;
+        //// Apply gravity
+        //foreach (var p in points)
+        //    p.velocity += gravity * dt;
 
         // Apply spring forces
         foreach (var spring in springs)
