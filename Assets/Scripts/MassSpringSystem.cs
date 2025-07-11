@@ -126,7 +126,14 @@ public class MassSpringSystem : MonoBehaviour
        
         frameCounter++;
         physics.UpdatePhysics(points, springs, springStrength, damping, restitution, shapeMatchingStrength, constraintIterations, constraintStiffness, useCOMClamping, rotationalDamping, gravity, interactionForce, enableDebugLogs, debugInterval, frameCounter);
+        foreach (var pt in points)
+        {
+            if (pt.visual != null)
+                pt.visual.position = pt.position;
+        }
+
         interaction.UpdateInteraction(points);
+
     }
 
     void OnDrawGizmos()

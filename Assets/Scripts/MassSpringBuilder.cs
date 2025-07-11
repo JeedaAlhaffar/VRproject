@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 public class MassSpringBuilder : MonoBehaviour
@@ -41,7 +41,14 @@ public class MassSpringBuilder : MonoBehaviour
                 mp = new MassPoint(world, local);
                 weld[local] = mp;
                 points.Add(mp);
+                if (system.massPointPrefab != null)
+                {
+                    GameObject visual = Instantiate(system.massPointPrefab, mp.position, Quaternion.identity, system.transform);
+                    mp.visual = visual.transform; // احفظي Transform لتحدثيه لاحقاً
+                }
             }
+          
+
             idx2pt[i] = mp;
         }
 

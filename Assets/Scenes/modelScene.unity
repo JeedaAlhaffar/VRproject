@@ -255,6 +255,176 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   octreeManager: {fileID: 1227963014}
+  restitution: 0.6
+  friction: 0.3
+  minimumVelocity: 0.1
+  showDebugGizmos: 1
+  boundsColor: {r: 0, g: 1, b: 0, a: 1}
+  centerColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!1 &1086036126
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1086036132}
+  - component: {fileID: 1086036131}
+  - component: {fileID: 1086036130}
+  - component: {fileID: 1086036129}
+  - component: {fileID: 1086036128}
+  - component: {fileID: 1086036127}
+  m_Layer: 0
+  m_Name: CubeSolid
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1086036127
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 42715d15759af084fb36883bf51300bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  octreeManager: {fileID: 1227963014}
+  restitution: 0.6
+  friction: 0.3
+  minimumVelocity: 0.1
+  showDebugGizmos: 1
+  boundsColor: {r: 0, g: 1, b: 0, a: 1}
+  centerColor: {r: 1, g: 0, b: 0, a: 1}
+--- !u!114 &1086036128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 103b70873028e054181160831e7f8c40, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  material: 1
+  springStrength_Custom: 50
+  damping_Custom: 2
+  restitution_Custom: 0.3
+  shapeMatchingStrength_Custom: 5
+  enableShear_Custom: 1
+  enableBending_Custom: 0
+  constraintIterations_Custom: 2
+  constraintStiffness_Custom: 0.3
+  useCOMClamping_Custom: 1
+  rotationalDamping_Custom: 0.1
+  enableShear: 1
+  enableBending: 0
+  gravity: {x: 0, y: -9.81, z: 0}
+  interactionForce: 500
+  structuralColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  shearColor: {r: 0, g: 1, b: 0, a: 1}
+  bendingColor: {r: 1, g: 0, b: 0, a: 1}
+  couplingColor: {r: 0, g: 0, b: 1, a: 1}
+  debugInterval: 60
+  enableDebugLogs: 0
+  massPointPrefab: {fileID: 2272971833013823357, guid: cdae374d07f52604eb2c35856f4253fe, type: 3}
+  fillResolution: 8
+--- !u!65 &1086036129
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Size: {x: 1, y: 1, z: 1}
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!23 &1086036130
+MeshRenderer:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  m_Enabled: 1
+  m_CastShadows: 1
+  m_ReceiveShadows: 1
+  m_DynamicOccludee: 1
+  m_StaticShadowCaster: 0
+  m_MotionVectors: 1
+  m_LightProbeUsage: 1
+  m_ReflectionProbeUsage: 1
+  m_RayTracingMode: 2
+  m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
+  m_SmallMeshCulling: 1
+  m_RenderingLayerMask: 1
+  m_RendererPriority: 0
+  m_Materials:
+  - {fileID: 2100000, guid: 31321ba15b8f8eb4c954353edc038b1d, type: 2}
+  m_StaticBatchInfo:
+    firstSubMesh: 0
+    subMeshCount: 0
+  m_StaticBatchRoot: {fileID: 0}
+  m_ProbeAnchor: {fileID: 0}
+  m_LightProbeVolumeOverride: {fileID: 0}
+  m_ScaleInLightmap: 1
+  m_ReceiveGI: 1
+  m_PreserveUVs: 0
+  m_IgnoreNormalsForChartDetection: 0
+  m_ImportantGI: 0
+  m_StitchLightmapSeams: 1
+  m_SelectedEditorRenderState: 3
+  m_MinimumChartSize: 4
+  m_AutoUVMaxDistance: 0.5
+  m_AutoUVMaxAngle: 89
+  m_LightmapParameters: {fileID: 0}
+  m_SortingLayerID: 0
+  m_SortingLayer: 0
+  m_SortingOrder: 0
+  m_AdditionalVertexStreams: {fileID: 0}
+--- !u!33 &1086036131
+MeshFilter:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!4 &1086036132
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1086036126}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1, y: -1, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1227963013
 GameObject:
   m_ObjectHideFlags: 0
@@ -579,6 +749,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   octreeManager: {fileID: 1227963014}
+  restitution: 0.6
+  friction: 0.3
+  minimumVelocity: 0.1
+  showDebugGizmos: 1
+  boundsColor: {r: 0, g: 1, b: 0, a: 1}
+  centerColor: {r: 1, g: 0, b: 0, a: 1}
 --- !u!1001 &1681533792112871998
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -834,3 +1010,4 @@ SceneRoots:
   - {fileID: 3269433875514150997}
   - {fileID: 696882692}
   - {fileID: 1227963015}
+  - {fileID: 1086036132}

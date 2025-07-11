@@ -285,4 +285,3 @@ public class Octree
         return new Bounds(center, newExtents * 2);
     }
 }
-

@@ -11,8 +11,8 @@ public class SimulationLoader : MonoBehaviour
 
         Debug.Log("Loading models: " + modelName1 + " and " + modelName2);
 
-        LoadAndActivateMassSpring(modelName1, new Vector3(-2, 0, 0)); // مكان الموديل الأول
-        LoadAndActivateMassSpring(modelName2, new Vector3(2, 0, 0));  // مكان الموديل التاني
+        LoadAndActivateMassSpring(modelName1, new Vector3(-5, 5, 0)); // مكان الموديل الأول
+        LoadAndActivateMassSpring(modelName2, new Vector3(2, 5, 0));  // مكان الموديل التاني
     }
 
     void LoadAndActivateMassSpring(string modelName, Vector3 position)
