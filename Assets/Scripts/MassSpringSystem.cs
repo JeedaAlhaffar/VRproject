@@ -1,10 +1,10 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(MeshFilter))]
 public class MassSpringSystem : MonoBehaviour
 {
-    public enum MaterialType { Slimy, Rubber, Solid, Custom }
+    public enum MaterialType { Slimy, Rubber, Solid, Custom,Sand }
 
     [Header("Material Settings")]
     public MaterialType material = MaterialType.Rubber;
@@ -48,6 +48,31 @@ public class MassSpringSystem : MonoBehaviour
 
     [Header("Fill Settings")]
     [Range(4, 32)] public int fillResolution = 8;
+    [Header("Mass Settings")]
+    [Tooltip("Total mass of the entire object in kilograms.")]
+    public float totalMass = 1f;
+    [Header("Compression Settings")]
+    [Range(0f, 1f)]
+    [Tooltip("How much height is preserved when resting on ground: 0=flat, 1=no settle.")]
+    public float compressionFactor = 1f;
+    [Header("Ground Settings (optional)")]
+    public Transform groundPlane; // assign your Plane's transform in the Inspector
+    [Header("Behavior")]
+    [Tooltip("If true, this soft‐body will remain fixed and not fall under gravity.")]
+    public bool isStaticBody = false;
+    [Header("Spring Break Settings")]
+    [Tooltip("Under this fraction of rest‐length the spring is slack (no force).")]
+    [Range(0f, 1f)] public float minStretchFactor = 0.5f;
+
+    [Tooltip("Above this fraction of rest‐length the spring breaks.")]
+    [Range(1f, 3f)] public float maxStretchFactor = 1.5f;
+    [Header("Environmental Forces")]
+    [Tooltip("Constant wind acceleration (m/s²) applied each FixedUpdate.")]
+    public Vector3 wind = new Vector3(0f, 0f, 0f);
+    [Header("Spring Audio (one‑shot)")]
+    public AudioClip clipSpringBreak;    // assign Chain Break(M4A_128K).m4a
+    public AudioClip clipSpringSlack;    // assign Chains Being Broken 6(M4A_128K).m4a
+
 
     // Runtime parameters
     private float springStrength;
@@ -76,6 +101,12 @@ public class MassSpringSystem : MonoBehaviour
     private MassSpringBuilder builder;
     private MassSpringPhysics physics;
     private MassSpringInteraction interaction;
+    public int[] surfacePointIndices;
+    private float originalHeight;
+    float floorY;      // world‑space Y of the mesh bottom
+    float ceilingY;    // world‑space Y of the mesh top
+
+
 
     void Awake()
     {
@@ -86,6 +117,7 @@ public class MassSpringSystem : MonoBehaviour
 
     void Start()
     {
+
         var renderer = GetComponent<MeshRenderer>();
         if (renderer) renderer.enabled = false;
 
@@ -94,13 +126,77 @@ public class MassSpringSystem : MonoBehaviour
         originalVertices = mesh.vertices;
         originalTriangles = mesh.triangles;
 
-        lastMaterial = material;
+        lastMaterial = material; 
         lastEnableShear = enableShear;
         lastEnableBending = enableBending;
+        Bounds b = mesh.bounds;
+        Vector3 bottomLocal = new Vector3(0f, b.min.y, 0f);
+        Vector3 topLocal = new Vector3(0f, b.max.y, 0f);
+
+        floorY = transform.TransformPoint(bottomLocal).y;
+        ceilingY = transform.TransformPoint(topLocal).y;
+        // In MassSpringSystem.Start(), when assigning floorY for a static body:
+
+        if (groundPlane != null)
+        {
+            // assume the plane also has a MeshFilter
+            var mf = groundPlane.GetComponent<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null)
+            {
+                // plane's local mesh bottom (min.y)
+                float bottomLocalY = mf.sharedMesh.bounds.min.y;
+                // convert to world Y
+                floorY = groundPlane.TransformPoint(new Vector3(0, bottomLocalY, 0)).y;
+            }
+            else
+            {
+                floorY = groundPlane.position.y;
+            }
+        }
+
+        Debug.Log($"[MassSpringSystem] floorY = {floorY}");
 
         ApplyMaterialSettings();
         builder.Initialize(this, points, springs,  originalVertices, originalTriangles);
         builder.BuildMassSpringFull(fillResolution, structuralColor, shearColor, bendingColor, couplingColor, enableShearRuntime, enableBendingRuntime);
+        // ───────────────────────────────────────────────
+        // NEW: Distribute totalMass evenly to each MassPoint
+        if (points.Count > 0)
+        {
+            float perMass = totalMass / points.Count;
+            foreach (var p in points)
+            {
+                p.mass = perMass;
+                p.invMass = (perMass > 0f) ? 1f / perMass : 0f;
+            }
+        }
+        else
+        {
+            Debug.LogWarning("MassSpringSystem: no MassPoints were generated.");
+        }
+
+
+    }
+    public float GetCeilingY()
+    {
+        return ceilingY;
+    }
+
+
+    /// <summary>
+    /// How tall is the object above the floor at rest.
+    /// </summary>
+    public float GetOriginalHeight()
+    {
+        return ceilingY - floorY;
+    }
+
+    /// <summary>
+    /// The world‑space Y of the mesh bottom at rest.
+    /// </summary>
+    public float GetFloorY()
+    {
+        return floorY;
     }
 
     void Update()
@@ -120,13 +216,60 @@ public class MassSpringSystem : MonoBehaviour
 
         interaction.HandleMouseInput(points);
     }
-
+    ///// <summary>
+    ///// Called by physics to know the rest‐height above y=0.
+    ///// </summary>
+    //public float GetOriginalHeight()
+    //{
+    //    return originalHeight;
+    //}
     void FixedUpdate()
     {
-       
-        frameCounter++;
-        physics.UpdatePhysics(points, springs, springStrength, damping, restitution, shapeMatchingStrength, constraintIterations, constraintStiffness, useCOMClamping, rotationalDamping, gravity, interactionForce, enableDebugLogs, debugInterval, frameCounter);
+        // 1) early‐out static bodies
+        if (isStaticBody)
+            return;
+
+        // 2) advance all the points & springs
+        physics.UpdatePhysics(
+            points, springs,
+            springStrength, damping, restitution,
+            shapeMatchingStrength, constraintIterations,
+            constraintStiffness, useCOMClamping, rotationalDamping,
+            gravity, interactionForce,
+            enableDebugLogs, debugInterval,
+            ++frameCounter);
+
+        // 3) remove any springs that have Broken == true
+        springs.RemoveAll(s => s.Broken);
+
+        // 4) update any “picking / dragging” gizmos, etc.
         interaction.UpdateInteraction(points);
+
+        // 5) synchronize your mesh vertices from the new point positions
+        var mf = GetComponent<MeshFilter>();
+        var mesh = mf.mesh;
+        var verts = mesh.vertices; // (local-space)
+
+        if (verts.Length == surfacePointIndices.Length)
+        {
+            for (int i = 0; i < surfacePointIndices.Length; i++)
+            {
+                int pi = surfacePointIndices[i];
+                verts[i] = transform.InverseTransformPoint(points[pi].position);
+            }
+            mesh.vertices = verts;
+            mesh.RecalculateBounds();
+        }
+        else
+        {
+            Debug.LogWarning("Vertex array length mismatch. Skipping mesh update.");
+        }
+        foreach (var pt in points)
+        {
+            // only update those that actually have a visual assigned
+            if (pt.visual != null)
+                pt.visual.position = pt.position;
+        }
     }
 
     void OnDrawGizmos()
@@ -159,6 +302,12 @@ public class MassSpringSystem : MonoBehaviour
                 constraintStiffness = 0.1f;
                 useCOMClamping = true;
                 rotationalDamping = 0.05f;
+                compressionFactor = 1f;  // only 10% height preserved
+                minStretchFactor = 0.1f;  // almost never slack
+                maxStretchFactor = 2.7f;
+                wind = new Vector3(-0.01f, 0, 0);   // gentle breeze
+
+
                 break;
 
             case MaterialType.Rubber:
@@ -170,8 +319,13 @@ public class MassSpringSystem : MonoBehaviour
                 enableBendingRuntime = false;
                 constraintIterations = 2;
                 constraintStiffness = 0.5f;
-                useCOMClamping = true;
+                useCOMClamping = true ;
                 rotationalDamping = 0.1f;
+                compressionFactor = 1f;  // 70% height preserved
+                minStretchFactor = 0.2f;  // almost never slack
+                maxStretchFactor = 90.0f; // stretches more before breaking
+                wind = new Vector3(-0.01f, 0, 0);   // gentle breeze
+
                 break;
 
             case MaterialType.Solid:
@@ -185,6 +339,11 @@ public class MassSpringSystem : MonoBehaviour
                 constraintStiffness =1f;
                 useCOMClamping = true;
                 rotationalDamping = 0.3f;
+                compressionFactor = 1f;    // 100% height preserved
+                minStretchFactor = 0.3f;  // almost never slack
+                maxStretchFactor = 2.0f;  // very stiff—break only at extreme stretch
+                wind = new Vector3(-0.8f, 0, 0);   // gentle breeze
+
                 break;
 
             case MaterialType.Custom:
@@ -199,6 +358,19 @@ public class MassSpringSystem : MonoBehaviour
                 useCOMClamping = useCOMClamping_Custom;
                 rotationalDamping = rotationalDamping_Custom;
                 break;
+            case MaterialType.Sand:
+                springStrength = 2f; // extremely weak springs
+                damping = 10f;       // high damping to prevent bouncing
+                restitution = 0.0f;  // no bounciness
+                shapeMatchingStrength = 0f;
+                enableShearRuntime = false;
+                enableBendingRuntime = false;
+                constraintIterations = 1;
+                constraintStiffness = 0.05f; // almost free movement
+                useCOMClamping = false;
+                rotationalDamping = 0f;
+                break;
+
         }
 
         if (material != MaterialType.Custom)

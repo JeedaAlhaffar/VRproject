@@ -1,4 +1,4 @@
-
+﻿
 using UnityEngine;
 using System.Collections.Generic;
 
@@ -8,10 +8,22 @@ public class MassSpringPhysics : MonoBehaviour
     {
         float dt = Time.fixedDeltaTime;
 
-        //// Apply gravity
-        //foreach (var p in points)
-        //    p.velocity += gravity * dt;
+        var system = GetComponent<MassSpringSystem>();
+        bool isStatic = (system != null && system.isStaticBody);
 
+        // 1) Apply gravity (skip if static)
+        if (!isStatic)
+        {
+            foreach (var p in points)
+                p.velocity += gravity * (p.invMass * dt);
+        }
+
+        if (!isStatic && system != null)
+        {
+            Vector3 windAccel = system.wind;
+            foreach (var p in points)
+                p.velocity += windAccel * (p.invMass * dt);
+        }
         // Apply spring forces
         foreach (var spring in springs)
             spring.Apply(springStrength, dt);
@@ -63,7 +75,10 @@ public class MassSpringPhysics : MonoBehaviour
         {
             float dist = Vector3.Distance(p.position, contactPoint);
             float weight = Mathf.Clamp01(1f - dist);
-            p.velocity += force * weight;
+            p.velocity += force * weight * p.invMass;
+            // clamp small bounce:
+            if (p.velocity.magnitude < 0.5f)
+                p.velocity = Vector3.zero;
         }
         //GetComponent<MassSpringSystem>().SaveState(); // Save state after applying collision force
     }
@@ -108,24 +123,79 @@ public class MassSpringPhysics : MonoBehaviour
 
     void HandleCollisions(List<MassPoint> points, float restitution)
     {
+        var sys = GetComponent<MassSpringSystem>();
+        float comp = sys.compressionFactor;
+        float H = sys.GetOriginalHeight();
+        float planeY = GroundManager.PlaneTopY;
+        float allowed = H * (1f - comp);
+        float minY = planeY - allowed;
+
+        // FLOOR FRICTION SETTINGS
+        float frictionCoefficient = 5f;    // tweak: how strong is ground friction
+        float velocityThreshold = 0.01f;  // below this horizontal speed, we zero it
+
+        // 1) per‐point sink + bounce + friction
         foreach (var p in points)
         {
-            if (p.position.y < 0f)
+            // did it penetrate?
+            if (p.position.y < minY)
             {
-                Vector3 pos = p.position;
-                pos.y = 0f;
-                p.position = pos;
+                // clamp to floor slab
+                p.position.y = minY;
 
+                // bounce Y‐component
                 if (p.velocity.y < 0f)
-                {
-                    // Apply stronger bounce and preserve some vertical velocity
-                    p.velocity.y = -p.velocity.y * restitution * 1.2f; // Slightly boost restitution
-                    if (Mathf.Abs(p.velocity.y) < 0.2f) // Increased threshold to allow recovery
-                        p.velocity.y = Mathf.Max(p.velocity.y, 0f); // Prevent sticking
-                }
+                    p.velocity.y = -p.velocity.y * restitution;
+
+                // *** FLOOR FRICTION ON XZ ***
+                // extract horizontal velocity (x,z)
+                Vector3 vHoriz = new Vector3(p.velocity.x, 0f, p.velocity.z);
+
+                // apply simple linear friction: F = -μ * vHoriz
+                // impulse = F * dt
+                Vector3 frictionImpulse = -vHoriz * frictionCoefficient * Time.fixedDeltaTime;
+                // apply only if it's slowing, and does not reverse direction
+                if (Vector3.Dot(vHoriz + frictionImpulse, vHoriz) > 0f)
+                    vHoriz += frictionImpulse;
+                else
+                    vHoriz = Vector3.zero;  // friction stops it
+
+                // if very small, snap to zero
+                if (vHoriz.magnitude < velocityThreshold)
+                    vHoriz = Vector3.zero;
+
+                // reassemble full velocity
+                p.velocity = new Vector3(vHoriz.x, p.velocity.y, vHoriz.z);
             }
         }
+
+        // 2) full‐body COM clamp only if comp == 1
+        if (comp >= 0.999f)
+        {
+            Vector3 com = Vector3.zero;
+            foreach (var p in points) com += p.position;
+            com /= points.Count;
+
+            if (com.y < planeY)
+            {
+                float delta = planeY - com.y;
+                foreach (var p in points)
+                    p.position.y += delta;
+            }
+        }
+
+        // 3) micro‐snap epsilon
+        float eps = 0.001f;
+        foreach (var p in points)
+        {
+            if (Mathf.Abs(p.position.y - planeY) < eps)
+                p.position.y = planeY;
+        }
     }
+
+
+
+
 
     void ApplyCOMClamping(List<MassPoint> points)
     {

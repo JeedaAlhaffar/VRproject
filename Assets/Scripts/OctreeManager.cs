@@ -81,4 +81,12 @@ public class OctreeManager : MonoBehaviour
             octree.DrawGizmos();
         }
     }
+    public void UpdateObject(GameObject obj)
+    {
+        if (octree != null && obj != null)
+        {
+            octree.Remove(obj);
+            octree.Insert(obj);
+        }
+    }
 }
