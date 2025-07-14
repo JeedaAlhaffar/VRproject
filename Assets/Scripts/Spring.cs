@@ -7,8 +7,8 @@ public class Spring
     public Color color;
     public MassSpringSystem system;     // <-- reference
 
-    public float minStretch = 0.5f;
-    public float maxStretch = 1.5f;
+    public float minStretch = 0.0f;
+    public float maxStretch = 100.5f;
     bool _broken = false;
 
     public Spring(MassPoint a, MassPoint b, Color c, MassSpringSystem sys)

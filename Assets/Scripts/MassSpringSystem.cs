@@ -65,7 +65,7 @@ public class MassSpringSystem : MonoBehaviour
     [Range(0f, 1f)] public float minStretchFactor = 0.5f;
 
     [Tooltip("Above this fraction of rest‐length the spring breaks.")]
-    [Range(1f, 3f)] public float maxStretchFactor = 1.5f;
+    [Range(0f, 120f)] public float maxStretchFactor = 1.5f;
     [Header("Environmental Forces")]
     [Tooltip("Constant wind acceleration (m/s²) applied each FixedUpdate.")]
     public Vector3 wind = new Vector3(0f, 0f, 0f);
@@ -303,8 +303,8 @@ public class MassSpringSystem : MonoBehaviour
                 useCOMClamping = true;
                 rotationalDamping = 0.05f;
                 compressionFactor = 1f;  // only 10% height preserved
-                minStretchFactor = 0.1f;  // almost never slack
-                maxStretchFactor = 2.7f;
+                minStretchFactor = 0.2f;  // almost never slack
+                maxStretchFactor = 80.7f;
                 wind = new Vector3(-0.01f, 0, 0);   // gentle breeze
 
 
@@ -322,7 +322,7 @@ public class MassSpringSystem : MonoBehaviour
                 useCOMClamping = true ;
                 rotationalDamping = 0.1f;
                 compressionFactor = 1f;  // 70% height preserved
-                minStretchFactor = 0.2f;  // almost never slack
+                minStretchFactor = 0.1f;  // almost never slack
                 maxStretchFactor = 90.0f; // stretches more before breaking
                 wind = new Vector3(-0.01f, 0, 0);   // gentle breeze
 
@@ -340,8 +340,8 @@ public class MassSpringSystem : MonoBehaviour
                 useCOMClamping = true;
                 rotationalDamping = 0.3f;
                 compressionFactor = 1f;    // 100% height preserved
-                minStretchFactor = 0.3f;  // almost never slack
-                maxStretchFactor = 2.0f;  // very stiff—break only at extreme stretch
+                minStretchFactor = 0.1f;  // almost never slack
+                maxStretchFactor = 40.0f;  // very stiff—break only at extreme stretch
                 wind = new Vector3(-0.8f, 0, 0);   // gentle breeze
 
                 break;

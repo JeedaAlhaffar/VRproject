@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Full collision detection + response for your mass–spring objects.
@@ -20,13 +21,13 @@ public class CollisionDetectionFull : MonoBehaviour
     [Tooltip("Minimum relative normal velocity to apply friction.")]
     public float minVelocity = 0.05f;
     [Tooltip("Skip impulses below this magnitude.")]
-    public float impulseThreshold = 0.001f;
+    public float impulseThreshold = 0.00001f;
 
     [Header("Position Correction")]
     [Tooltip("Percent of penetration to correct each frame.")]
     public float correctionFactor = 1f;
     [Tooltip("Allowable penetration slop.")]
-    public float slop = 0.01f;
+    public float slop = 0.0001f;
 
     [Header("Weight Falloff")]
     [Tooltip("Max radius around contact to distribute impulse.")]
@@ -37,92 +38,138 @@ public class CollisionDetectionFull : MonoBehaviour
     public Color boundsColor = Color.magenta;
     public Color centerColor = Color.black;
 
+    [Header("Audio")]
+    public AudioSource audioSrc;
+    public AudioClip collisionClip;
 
     Vector3 lastPos;
     Vector3 velocity;
     Vector3 lastRegisteredPos;
 
+
     void Start()
     {
         lastPos = transform.position;
+        if (audioSrc == null)
+        {
+            audioSrc = GetComponent<AudioSource>();
+            if (audioSrc == null)
+            {
+                Debug.LogWarning($"{name}: no AudioSource found – adding one.");
+                audioSrc = gameObject.AddComponent<AudioSource>();
+                audioSrc.playOnAwake = false;
+            }
+        }
+
+        if (collisionClip == null)
+            Debug.LogWarning($"{name}: no collisionClip assigned in the Inspector!");
     }
 
     void Update()
     {
-        // Compute current body‐COM velocity approx
-        velocity = ComputeBodyCOMVelocity();
-        lastPos = transform.position;
+    }
+    /// <summary>
+    /// World‑space AABB from the MeshFilter’s sharedMesh.bounds.
+    /// </summary>
+    public Bounds ComputeBoundsFromMesh()
+    {
+        var mf = GetComponent<MeshFilter>();
+        if (mf == null || mf.sharedMesh == null)
+            return new Bounds(transform.position, Vector3.one * 0.1f);
 
-        // Broad phase via octree
+        // local bounds
+        Bounds local = mf.sharedMesh.bounds;
+        // world center
+        Vector3 worldCenter = transform.TransformPoint(local.center);
+        // world extents (scale by lossyScale)
+        Vector3 worldExtents = Vector3.Scale(local.extents, transform.lossyScale);
+        return new Bounds(worldCenter, worldExtents * 2f);
+    }
+
+    void FixedUpdate()
+    {
+
+
         if (octreeManager == null)
         {
-            Debug.LogWarning($"{name}: octreeManager not assigned");
+            Debug.LogError($"{name}: OctreeManager is NULL!");
             return;
         }
 
-        // Only update octree if moved enough
-        if (Vector3.Distance(transform.position, lastRegisteredPos) > 0.01f)
-        {
-            octreeManager.UpdateObject(gameObject);
-            lastRegisteredPos = transform.position;
-        }
+        // 1) Always refresh your entry in the octree:
+        octreeManager.UpdateObject(gameObject);
+        lastRegisteredPos = transform.position;
 
+        // 2) Now fetch candidates:
         var candidates = octreeManager.GetCollisionCandidates(gameObject);
+        Debug.Log($"[{name}] {candidates?.Count ?? 0} collision candidates.");
         if (candidates == null) return;
 
-        // Get this body’s AABB & sphere
-        var aabbA = ComputeBoundsFromPoints();
-        var sphA = aabbA.extents.magnitude;
+        // 3) get candidates
+        candidates = octreeManager.GetCollisionCandidates(gameObject);
+        if (candidates == null) return;
+
+        // 4) your broad‐phase tests
+        var aabbA = ComputeBoundsFromMesh();
+        float sphA = aabbA.extents.magnitude;
 
         foreach (var other in candidates)
         {
-            if (other == null ||
-                other == this.gameObject ||
-                other.transform.root == transform.root)
+            if (other == null || other == gameObject)
+            {
+                Debug.Log($"{name}: skipped null/self candidate");
                 continue;
+            }
 
-            // 1) AABB
+            if (other.transform.root == transform.root)
+            {
+                Debug.Log($"{name}: skipped same-root candidate");
+                continue;
+            }
+
             var otherScript = other.GetComponent<CollisionDetectionFull>();
-            if (otherScript == null) continue;
-            var aabbB = otherScript.ComputeBoundsFromPoints();
-            if (!aabbA.Intersects(aabbB)) continue;
+            if (otherScript == null)
+            {
+                Debug.Log($"{name}: skipped non-collisionable object {other.name}");
+                continue;
+            }
 
-            // 2) bounding sphere
-            var sphB = aabbB.extents.magnitude;
+            var aabbB = otherScript.ComputeBoundsFromMesh();
+            if (!aabbA.Intersects(aabbB))
+            {
+                Debug.Log($"{name}: failed AABB test with {other.name}");
+                continue;
+            }
+
+            float sphB = aabbB.extents.magnitude;
             if ((aabbA.center - aabbB.center).magnitude > (sphA + sphB))
+            {
+                Debug.Log($"{name}: failed sphere test with {other.name}");
                 continue;
+            }
 
-            // 3) Narrow: GJK + EPA
-            CollisionInfo info = CheckCollision(other);
-            if (!info.hasCollision)
-                continue;
-
-            // 4) Resolve
-            ApplyResponse(other, otherScript, info);
+            var info = CheckCollision(other);
+            if (info.hasCollision)
+            {
+                Debug.Log($"{name}: calling ApplyResponse to {other.name}");
+                ApplyResponse(other, otherScript, info);
+            }
+            else
+            {
+                Debug.Log($"{name}: CheckCollision returned false for {other.name}");
+            }
+        }
+        if (octreeManager == null)
+        {
+            Debug.LogError($"{name}: OctreeManager is NULL!");
+            return;
         }
     }
-
     /// <summary>
     /// Build an AABB from your MassPoints
     /// </summary>
-    public Bounds ComputeBoundsFromPoints()
-    {
-        var ms = GetComponent<MassSpringSystem>();
-        if (ms == null)
-            return new Bounds(transform.position, Vector3.one * 0.1f);
+    
 
-        var pts = ms.GetPoints();
-        if (pts == null || pts.Count == 0)
-            return new Bounds(transform.position, Vector3.one * 0.1f);
-
-        Vector3 min = pts[0].position, max = pts[0].position;
-        foreach (var p in pts)
-        {
-            min = Vector3.Min(min, p.position);
-            max = Vector3.Max(max, p.position);
-        }
-        return new Bounds((min + max) * 0.5f, max - min);
-    }
 
     struct CollisionInfo
     {
@@ -140,7 +187,7 @@ public class CollisionDetectionFull : MonoBehaviour
     {
         CollisionInfo info = new CollisionInfo { hasCollision = false };
 
-        // 1) gather support polys
+        // 1) gather verts…
         Vector3[] A = GetWorldVerts(gameObject);
         Vector3[] B = GetWorldVerts(other);
         if (A.Length == 0 || B.Length == 0) return info;
@@ -148,86 +195,31 @@ public class CollisionDetectionFull : MonoBehaviour
         // 2) GJK
         if (!GJKIntersect(A, B)) return info;
 
-        // 3) EPA - Expansion Polytope Algorithm (not implemented here)
-        //    You can call your EPA code to get exact normal+depth.
-        //    For now we approximate:
-        info.normal = (transform.position - other.transform.position).normalized;
-        float rA = ComputeBoundsFromPoints().extents.magnitude;
-        float rB = other.GetComponent<CollisionDetectionFull>()
-                     .ComputeBoundsFromPoints().extents.magnitude;
-        float centerDist = (transform.position - other.transform.position).magnitude;
-        info.depth = Mathf.Max(0f, (rA + rB) - centerDist);
+        // 3) EPA:
+        Vector3 epaN;
+        float epaD;
+        if (!ComputeEPA(gameObject, other, out epaN, out epaD) || epaD <= slop)
+            return info;   // no real penetration
 
-        // 4) contact point halfway
-        info.point = (transform.position + other.transform.position) * 0.5f;
         info.hasCollision = true;
+        info.normal = epaN;
+        info.depth = epaD;
+        info.point = (transform.position + other.transform.position) * 0.5f;
         return info;
+
+
+
     }
 
-    //void ApplyResponse(
-    //    GameObject other,
-    //    CollisionDetectionFull otherScript,
-    //    CollisionInfo info)
-    //{
-    //    // 1) relative velocity along normal
-    //    Vector3 vRel = velocity - otherScript.velocity;
-    //    float vn = Vector3.Dot(vRel, info.normal);
-    //    if (vn > 0f) return;   // separating
 
-    //    // 2) compute total invMass of each body
-    //    var msA = GetComponent<MassSpringSystem>().GetPoints();
-    //    var msB = other.GetComponent<MassSpringSystem>().GetPoints();
-    //    float invMA = 0f, invMB = 0f;
-    //    foreach (var p in msA) invMA += p.invMass;
-    //    foreach (var p in msB) invMB += p.invMass;
 
-    //    // 3) scalar impulse
-    //    float e = restitution;
-    //    float j = -(1 + e) * vn / (invMA + invMB);
-    //    Vector3 impulse = j * info.normal;
-    //    if (impulse.magnitude < impulseThreshold) return;
-
-    //    // 4) positional correction
-    //    float corr = Mathf.Max(info.depth - slop, 0f) / (invMA + invMB) * correctionFactor;
-    //    Vector3 offset = info.normal * corr;
-    //    transform.position += offset * invMA;   // move this body
-    //    other.transform.position -= offset * invMB; // move other
-
-    //    // 5) distribute impulse to each MassPoint
-    //    DistributeImpulse(msA, info.point, impulse, +1);
-    //    DistributeImpulse(msB, info.point, -impulse, +1);
-
-    //    // 6) optional: friction (tangent)
-    //    Vector3 tangent = vRel - vn * info.normal;
-    //    if (tangent.magnitude > minVelocity)
-    //    {
-    //        tangent.Normalize();
-    //        Vector3 ft = -j * friction * tangent;
-    //        DistributeImpulse(msA, info.point, ft, +1);
-    //        DistributeImpulse(msB, info.point, -ft, +1);
-    //    }
-    //}
 
     /// <summary>
     /// Distribute a world‐space impulse to mass points.
     /// weight = clamp(1 - dist/R,0,1)
     /// scaled by invMass.
     /// </summary>
-    void DistributeImpulse(
-        List<MassPoint> pts,
-        Vector3 contact,
-        Vector3 impulse,
-        float scale = 1f)
-    {
-        foreach (var p in pts)
-        {
-            float dist = Vector3.Distance(p.position, contact);
-            if (dist > impulseRadius) continue;
-            // linear falloff
-            float w = Mathf.Clamp01(1f - dist / impulseRadius);
-            p.velocity += (impulse * (w * p.invMass * scale));
-        }
-    }
+
 
     // ------------------------
     // GJK Implementation
@@ -304,18 +296,19 @@ public class CollisionDetectionFull : MonoBehaviour
     Vector3[] GetWorldVerts(GameObject go)
     {
         var mf = go.GetComponent<MeshFilter>();
-        if (mf == null || mf.sharedMesh == null) return new Vector3[0];
-        var local = mf.sharedMesh.vertices;
+        if (mf == null || mf.mesh == null) return new Vector3[0];
+        var local = mf.mesh.vertices;  // **deformed** vertices
         var w = new Vector3[local.Length];
         for (int i = 0; i < local.Length; i++)
             w[i] = go.transform.TransformPoint(local[i]);
         return w;
     }
 
+
     void OnDrawGizmos()
     {
         if (!showGizmos) return;
-        var b = ComputeBoundsFromPoints();
+        var b = ComputeBoundsFromMesh();
         Gizmos.color = boundsColor;
         Gizmos.DrawWireCube(b.center, b.size);
         Gizmos.color = centerColor;
@@ -324,89 +317,57 @@ public class CollisionDetectionFull : MonoBehaviour
     /// <summary>
     /// Full response: guaranteed to push bodies apart + bounce + friction.
     /// </summary>
-    void ApplyResponse(
-        GameObject other,
-        CollisionDetectionFull otherScript,
-        CollisionInfo info)
+    void ApplyResponse(GameObject other, CollisionDetectionFull otherScript, CollisionInfo info)
     {
-        // 0) grab mass points
         var msA = GetComponent<MassSpringSystem>().GetPoints();
         var msB = other.GetComponent<MassSpringSystem>().GetPoints();
-        if (otherScript == null || msA == null || msB == null) return;
+        if (msA == null || msB == null) return;
 
-        // ---- STEP 1: compute true COM velocities  ----
-        // (instead of using transform deltas)
-        Vector3 vA = ComputeCOMVelocity(msA);
-        Vector3 vB = otherScript.ComputeCOMVelocity(msB);
-        Vector3 vRel = vA - vB;
-        float vn = Vector3.Dot(vRel, info.normal);
-
-        Debug.Log($"vn = {vn:F4}, depth = {info.depth:F4}");
-
-        // ---- STEP 2: sum invMass of each body ----
-        float invMA = 0f, invMB = 0f;
-        foreach (var p in msA) invMA += p.invMass;
-        foreach (var p in msB) invMB += p.invMass;
-        if (invMA + invMB <= 0f) return;  // avoid division by zero
-
-        // ---- STEP 3: decide whether to apply bounce impulse ----
-        bool separating = (vn > 0f);
-        bool deepPen = (info.depth > slop * 1.1f);
-
-        // if separating AND not deepPen ⇒ bodies are moving apart and tiny or no penetration ⇒ skip
-        if (separating && !deepPen)
-            return;
-
-        // compute impulse magnitude j
-        float j;
-        if (!separating)
+        // 1) Positional correction applied to mass points (not transform)
+        float invMA = msA.Sum(p => p.invMass);
+        float invMB = msB.Sum(p => p.invMass);
+        float pen = Mathf.Max(info.depth - slop, 0f);
+        if (pen > 0f)
         {
-            // normal bounce formula
-            float e = restitution;
-            j = -(1 + e) * vn / (invMA + invMB);
-        }
-        else
-        {
-            // vn > 0 (separating) but deep penetration ⇒ force push‐apart
-            j = info.depth * 0.5f;
+            float corr = pen / (invMA + invMB) * correctionFactor;
+            Vector3 corrVec = info.normal * corr;
+            foreach (var p in msA) p.position += corrVec * p.invMass;
+            foreach (var p in msB) p.position -= corrVec * p.invMass;
         }
 
-        // clamp to a minimum so we always push if deeply penetrated
-        j = Mathf.Max(j, 0.05f);
+        // 2) Combine restitution from both materials
+        float e = Mathf.Clamp01((restitution + otherScript.restitution) * 0.5f);
 
-        Vector3 impulse = info.normal * j;
-        Debug.Log($"Applying impulse j={j:F4}, |impulse|={impulse.magnitude:F4}");
-
-        // ---- STEP 4: positional correction (full depth carve) ----
-        // carve them apart by exactly info.depth
-        Vector3 sep = info.normal * (info.depth + 0.001f);
-        transform.position += sep * 0.5f;
-        other.transform.position -= sep * 0.5f;
-
-        // ---- STEP 5: distribute bounce impulse to mass points ----
-        DistributeImpulse(msA, info.point, impulse);
-        DistributeImpulse(msB, info.point, -impulse);
-
-        // ---- STEP 6: friction impulse (tangent) ----
-        Vector3 tangent = vRel - vn * info.normal;
-        if (tangent.sqrMagnitude > (minVelocity * minVelocity))
+        // 3) Relative velocity and bounce impulse
+        Vector3 vARel = ComputeCOMVelocity(msA);
+        Vector3 vBRel = ComputeCOMVelocity(msB);
+        float vn = Vector3.Dot(vARel - vBRel, info.normal);
+        float j = -(1 + e) * vn / (invMA + invMB);
+        if (j > impulseThreshold)
         {
-            tangent.Normalize();
-            Vector3 frictionImp = -j * friction * tangent;
-            DistributeImpulse(msA, info.point, frictionImp);
-            DistributeImpulse(msB, info.point, -frictionImp);
+            Vector3 impulse = info.normal * j;
+            DistributeImpulse(msA, info.point, impulse);
+            DistributeImpulse(msB, info.point, -impulse);
+
+            // friction (optional)
+            Vector3 tangent = (vARel - vBRel) - vn * info.normal;
+            if (tangent.sqrMagnitude > 1e-6f)
+            {
+                tangent.Normalize();
+                Vector3 ft = -j * friction * tangent;
+                DistributeImpulse(msA, info.point, ft);
+                DistributeImpulse(msB, info.point, -ft);
+            }
         }
 
-        // ---- STEP 7: clamp tiny COM velocities to zero (stop forever bounce) ----
-        vA = ComputeCOMVelocity(msA);
-        if (vA.magnitude < 0.02f)
-            ZeroVelocities(msA);
+        // 4) Zero out only the COM velocity so the mesh doesn’t “jump”
+        Vector3 comVel = ComputeCOMVelocity(msA);
+        foreach (var p in msA) p.velocity -= comVel;
 
-        vB = ComputeCOMVelocity(msB);
-        if (vB.magnitude < 0.02f)
-            ZeroVelocities(msB);
+        // 5) Play sound
+        if (collisionClip != null && audioSrc != null)
+            audioSrc.PlayOneShot(collisionClip);
     }
-
     // Optional helpers you already have:
     Vector3 ComputeCOMVelocity(List<MassPoint> pts)
     {
@@ -415,11 +376,7 @@ public class CollisionDetectionFull : MonoBehaviour
         return sum / Mathf.Max(1, pts.Count);
     }
 
-    void ZeroVelocities(List<MassPoint> pts)
-    {
-        for (int i = 0; i < pts.Count; i++)
-            pts[i].velocity = Vector3.zero;
-    }
+
 
     void DistributeImpulse(
         List<MassPoint> pts,
@@ -436,13 +393,55 @@ public class CollisionDetectionFull : MonoBehaviour
     }
 
 
-    Vector3 ComputeBodyCOMVelocity()
+
+    bool ComputeEPA(GameObject goA, GameObject goB, out Vector3 normal, out float depth)
     {
-        var pts = GetComponent<MassSpringSystem>().GetPoints();
-        Vector3 sum = Vector3.zero;
-        foreach (var p in pts) sum += p.velocity;
-        return sum / pts.Count;
+        Bounds aabbA = goA.GetComponent<CollisionDetectionFull>().ComputeBoundsFromMesh();
+        Bounds aabbB = goB.GetComponent<CollisionDetectionFull>().ComputeBoundsFromMesh();
+
+        Vector3 overlap = GetOverlapAxis(aabbA, aabbB);
+        normal = Vector3.zero;
+        depth = 0f;
+
+        // If no overlap on any axis → no collision
+        if (overlap.x <= 0 || overlap.y <= 0 || overlap.z <= 0)
+            return false;
+
+        // Find the smallest axis of penetration
+        if (overlap.x < overlap.y && overlap.x < overlap.z)
+        {
+            normal = new Vector3(Mathf.Sign(aabbA.center.x - aabbB.center.x), 0f, 0f);
+            depth = overlap.x;
+        }
+        else if (overlap.y < overlap.z)
+        {
+            normal = new Vector3(0f, Mathf.Sign(aabbA.center.y - aabbB.center.y), 0f);
+            depth = overlap.y;
+        }
+        else
+        {
+            normal = new Vector3(0f, 0f, Mathf.Sign(aabbA.center.z - aabbB.center.z));
+            depth = overlap.z;
+        }
+
+        return true;
     }
+
+    Vector3 GetOverlapAxis(Bounds A, Bounds B)
+    {
+        Vector3 o = Vector3.zero;
+        o.x = (A.extents.x + B.extents.x) - Mathf.Abs(A.center.x - B.center.x);
+        o.y = (A.extents.y + B.extents.y) - Mathf.Abs(A.center.y - B.center.y);
+        o.z = (A.extents.z + B.extents.z) - Mathf.Abs(A.center.z - B.center.z);
+        return o;
+    }
+
+    void ZeroVelocities(List<MassPoint> pts)
+    {
+        for (int i = 0; i < pts.Count; i++)
+            pts[i].velocity = Vector3.zero;
+    }
+
 
 
 }

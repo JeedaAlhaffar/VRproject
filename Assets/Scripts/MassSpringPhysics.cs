@@ -67,6 +67,7 @@ public class MassSpringPhysics : MonoBehaviour
         // Debug output
         if (enableDebugLogs && frameCounter % debugInterval == 0)
             PrintDebugInfo(points, frameCounter);
+
     }
 
     public void ApplyImpactForce(List<MassPoint> points, Vector3 contactPoint, Vector3 force)
@@ -101,6 +102,7 @@ public class MassSpringPhysics : MonoBehaviour
             Vector3 correction = (goal - points[i].position) * shapeMatchingStrength * dt;
             points[i].velocity += correction;
         }
+
     }
 
     void SolveConstraints(List<Spring> springs, int constraintIterations, float constraintStiffness)

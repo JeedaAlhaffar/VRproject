@@ -5,12 +5,15 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/MainMenu.unity
     guid: 77b532ac3e34e3a419d6604315446398
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Simulation.unity
     guid: 6b703bd5ef9ba3042bad10f4056aab3d
+  - enabled: 1
+    path: Assets/Scenes/collisionScene.unity
+    guid: 5c0e7d8daea06934982a2b5aad5e8c4f
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   m_UseUCBPForAssetBundles: 0
