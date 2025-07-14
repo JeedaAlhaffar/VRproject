@@ -194,8 +194,11 @@ public class MassSpringBuilder : MonoBehaviour
 
     public void DestroySystem()
     {
-        points.Clear();
-        springs.Clear();
+        if (points != null && springs != null)
+        {
+            points.Clear();
+            springs.Clear();
+        }
     }
 
     void TryAddSpring(MassPoint a, MassPoint b, Color color, HashSet<(MassPoint, MassPoint)> connected)

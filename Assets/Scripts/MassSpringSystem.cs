@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(MeshFilter))]
@@ -60,6 +60,9 @@ public class MassSpringSystem : MonoBehaviour
     private float constraintStiffness;
     private bool useCOMClamping;
     private float rotationalDamping;
+    private float mass = 1f;
+    //private float density = 1f;
+    private float friction = 0.5f;
 
     // For debugging and material change detection
     private int frameCounter = 0;
@@ -78,11 +81,21 @@ public class MassSpringSystem : MonoBehaviour
     private MassSpringInteraction interaction;
 
     void Awake()
-    {
+    {//taghreed added this 
+        if (massPointPrefab == null)
+        {
+            massPointPrefab = Resources.Load<GameObject>("Prefabs/MassPoint");
+            if (massPointPrefab == null)
+            {
+                Debug.LogError("❌ Could not find prefab at Resources/Prefabs/MassPoint. Make sure it exists!");
+            }
+        }
+
         builder = gameObject.AddComponent<MassSpringBuilder>();
         physics = gameObject.AddComponent<MassSpringPhysics>();
         interaction = gameObject.AddComponent<MassSpringInteraction>();
     }
+
 
     void Start()
     {
@@ -146,6 +159,38 @@ public class MassSpringSystem : MonoBehaviour
     {
         builder.DestroySystem();
     }
+    // ==== START of Getters & Setters ====
+
+    public float GetMass() => mass;
+    public int GetDensity()
+    {
+        return fillResolution;
+    }
+    public float GetFriction() => friction;
+
+    public void SetMass(float value) => mass = Mathf.Max(0.01f, value);
+    public void SetDensity(float value)
+    {
+        fillResolution = (int)Mathf.Clamp(value, 4, 32);
+        RebuildSystem();
+    }
+
+    public void SetFriction(float value) => friction = Mathf.Clamp01(value);
+
+    // إعادة بناء النظام عند تغيّر القيم
+    void RebuildSystem()
+    {
+        if (builder == null || originalVertices == null || originalTriangles == null) return;
+
+        builder.DestroySystem();
+        ApplyMaterialSettings();
+        builder.Initialize(this, points, springs, originalVertices, originalTriangles);
+        builder.BuildMassSpringFull(fillResolution, structuralColor, shearColor, bendingColor, couplingColor, enableShearRuntime, enableBendingRuntime);
+    }
+
+    // ==== END of Getters & Setters ====
+
+
     public List<MassPoint> GetPoints()
     {
         return points;

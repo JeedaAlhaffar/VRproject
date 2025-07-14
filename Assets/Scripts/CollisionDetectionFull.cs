@@ -6,8 +6,8 @@ public class CollisionDetectionFull : MonoBehaviour
 {
     private Vector3 lastPosition;
     private Vector3 currentVelocity;
-    private bool isConcaveCached;
-    private bool concaveChecked = false;
+    //private bool isConcaveCached;
+    //private bool concaveChecked = false;
 
     // حل المشكلة الأولى: مركز الجسم
     private Vector3 meshCenter;
@@ -16,9 +16,7 @@ public class CollisionDetectionFull : MonoBehaviour
 
     private static Dictionary<GameObject, Bounds> boundsCache = new Dictionary<GameObject, Bounds>();
     private static Dictionary<GameObject, Vector3[]> vertsCache = new Dictionary<GameObject, Vector3[]>();
-
-    [Header("References")]
-    public OctreeManager octreeManager;
+    private OctreeManager octreeManager;
 
     [Header("Collision Response Settings")]
     public float restitution = 0.6f; // معامل الارتداد
@@ -34,6 +32,10 @@ public class CollisionDetectionFull : MonoBehaviour
     {
         lastPosition = transform.position;
         CalculateMeshBounds(); // حساب الحدود الفعلية للـ mesh
+        octreeManager = OctreeManager.Instance;
+        if (octreeManager == null)
+            Debug.LogError("❌ No OctreeManager instance found in scene!");
+
     }
 
     void Update()
@@ -117,12 +119,12 @@ public class CollisionDetectionFull : MonoBehaviour
             Bounds localBounds = collisionScript.meshBounds;
             Vector3 worldCenter = obj.transform.TransformPoint(localBounds.center);
             Vector3 worldSize = Vector3.Scale(localBounds.size, obj.transform.lossyScale);
-
             return new Bounds(worldCenter, worldSize);
         }
 
-        // fallback إلى الطريقة القديمة
-        return GetCachedBounds(obj);
+        // ❌ لا تعيد GetCachedBounds لأنك جاي منها أصلاً، فقط ارجع قيمة مبدئية أو احذف هذا الشرط
+        Debug.LogWarning($"⚠️ Object {obj.name} has no CollisionDetectionFull. Returning default bounds.");
+        return new Bounds(obj.transform.position, Vector3.one * 0.1f); // بديل آمن
     }
 
     #endregion
