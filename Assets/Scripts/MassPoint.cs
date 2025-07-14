@@ -5,6 +5,8 @@ public class MassPoint
     public Vector3 position;      // World position
     public Vector3 restPosition;  // Local rest position
     public Vector3 velocity;
+    public float mass = 1f;
+    public float invMass = 1f;
     public Transform visual;
 
     public MassPoint(Vector3 worldPos, Vector3 localRestPos)

@@ -30,8 +30,10 @@ public class MassSpringBuilder : MonoBehaviour
 
         var weld = new Dictionary<Vector3, MassPoint>();
         var idx2pt = new MassPoint[verts.Length];
+        system.surfacePointIndices = new int[verts.Length];
 
-        // Create mass points from mesh vertices (surface)
+
+
         for (int i = 0; i < verts.Length; i++)
         {
             var local = verts[i];
@@ -44,13 +46,15 @@ public class MassSpringBuilder : MonoBehaviour
                 if (system.massPointPrefab != null)
                 {
                     GameObject visual = Instantiate(system.massPointPrefab, mp.position, Quaternion.identity, system.transform);
-                    mp.visual = visual.transform; // احفظي Transform لتحدثيه لاحقاً
+                    mp.visual = visual.transform; 
                 }
-            }
-          
 
+            }
             idx2pt[i] = mp;
+            system.surfacePointIndices[i] = points.IndexOf(mp); // ✅ Added line
         }
+
+
 
         // Voxel fill interior points inside the mesh
         var bounds = mesh.bounds;
@@ -75,6 +79,10 @@ public class MassSpringBuilder : MonoBehaviour
                 }
 
         var connected = new HashSet<(MassPoint, MassPoint)>();
+        // Skip spring generation entirely for sand
+        if (system.material == MassSpringSystem.MaterialType.Sand)
+            return;
+
 
         // Structural springs (edges of mesh triangles)
         for (int i = 0; i < tris.Length; i += 3)
@@ -196,20 +204,36 @@ public class MassSpringBuilder : MonoBehaviour
     {
         if (points != null && springs != null)
         {
-            points.Clear();
-            springs.Clear();
+
+        points.Clear();
+        springs.Clear();
         }
     }
 
-    void TryAddSpring(MassPoint a, MassPoint b, Color color, HashSet<(MassPoint, MassPoint)> connected)
+    void TryAddSpring(
+        MassPoint a,
+        MassPoint b,
+        Color color,
+        HashSet<(MassPoint, MassPoint)> connected)
     {
         var key = (a, b);
         var rev = (b, a);
         if (connected.Contains(key) || connected.Contains(rev))
             return;
+
         connected.Add(key);
-        springs.Add(new Spring(a, b, color));
+
+        // 1) Instantiate:
+        var s = new Spring(a, b, color, system);
+
+        // 2) Configure its break/slack thresholds:
+        s.minStretch = system.minStretchFactor;
+        s.maxStretch = system.maxStretchFactor;
+
+        // 3) Add to your list:
+        springs.Add(s);
     }
+
 
     void CreateBendingSprings(HashSet<(MassPoint, MassPoint)> connected)
     {

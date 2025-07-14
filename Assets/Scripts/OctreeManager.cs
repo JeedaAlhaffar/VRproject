@@ -12,7 +12,6 @@ public class OctreeManager : MonoBehaviour
 
     private Octree octree;
     private List<GameObject> allObjects = new List<GameObject>();
-    ///////// taghreed added this to octree manager to remove octree object every time
     public static OctreeManager Instance { get; private set; }
 
     void Awake()
@@ -26,7 +25,7 @@ public class OctreeManager : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject); // (اختياري) إذا بدك يبقى بين المشاهد
     }
-    /////////
+
     void Start()
     {
         RebuildOctree();
@@ -93,6 +92,14 @@ public class OctreeManager : MonoBehaviour
         if (drawGizmos && octree != null)
         {
             octree.DrawGizmos();
+        }
+    }
+    public void UpdateObject(GameObject obj)
+    {
+        if (octree != null && obj != null)
+        {
+            octree.Remove(obj);
+            octree.Insert(obj);
         }
     }
 }

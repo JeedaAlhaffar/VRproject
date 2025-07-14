@@ -30,7 +30,7 @@ public class PhysicsUI : MonoBehaviour
         materialDropdown.onValueChanged.AddListener(OnMaterialChanged);
         weightSlider.onValueChanged.AddListener(OnWeightChanged);
         densitySlider.onValueChanged.AddListener(OnDensityChanged);
-        frictionSlider.onValueChanged.AddListener(OnFrictionChanged);
+        //frictionSlider.onValueChanged.AddListener(OnFrictionChanged);
         gravitySlider.onValueChanged.AddListener(OnGravityChanged);
     }
 
@@ -52,8 +52,8 @@ public class PhysicsUI : MonoBehaviour
         densitySlider.value = targetSystem.GetDensity();
         densityValueText.text = targetSystem.GetDensity().ToString("F2");
 
-        frictionSlider.value = targetSystem.GetFriction();
-        frictionValueText.text = targetSystem.GetFriction().ToString("F2");
+        //frictionSlider.value = targetSystem.GetFriction();
+        //frictionValueText.text = targetSystem.GetFriction().ToString("F2");
 
         gravitySlider.value = targetSystem.gravity.y;
         gravityValueText.text = targetSystem.gravity.y.ToString("F2");
@@ -84,13 +84,13 @@ public class PhysicsUI : MonoBehaviour
         Debug.Log("Density changed to: " + val);
     }
 
-   public void OnFrictionChanged(float val)
-    {
-        if (targetSystem == null) return;
-        targetSystem.SetFriction(val);
-        frictionValueText.text = val.ToString("F2");
-        Debug.Log("Friction changed to: " + val); 
-    }
+   //public void OnFrictionChanged(float val)
+   // {
+   //     if (targetSystem == null) return;
+   //     targetSystem.SetFriction(val);
+   //     frictionValueText.text = val.ToString("F2");
+   //     Debug.Log("Friction changed to: " + val); 
+   // }
 
   public void OnGravityChanged(float val)
     {

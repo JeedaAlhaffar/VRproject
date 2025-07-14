@@ -284,4 +284,24 @@ public class Octree
 
         return new Bounds(center, newExtents * 2);
     }
+    public bool Remove(GameObject obj)
+    {
+        if (obj == null) return false;
+
+        Bounds objBounds = GetBounds(obj);
+        if (!bounds.Intersects(objBounds)) return false;
+
+        if (objects.Remove(obj))
+            return true;
+
+        if (isDivided)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                if (children[i].Remove(obj))
+                    return true;
+            }
+        }
+        return false;
+    }
 }
