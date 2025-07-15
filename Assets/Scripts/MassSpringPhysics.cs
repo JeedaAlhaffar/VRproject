@@ -11,19 +11,19 @@ public class MassSpringPhysics : MonoBehaviour
         var system = GetComponent<MassSpringSystem>();
         bool isStatic = (system != null && system.isStaticBody);
 
-        //// 1) Apply gravity (skip if static)
-        //if (!isStatic)
-        //{
-        //    foreach (var p in points)
-        //        p.velocity += gravity * (p.invMass * dt);
-        //}
+        // 1) Apply gravity (skip if static)
+        if (!isStatic)
+        {
+            foreach (var p in points)
+                p.velocity += gravity * (p.invMass * dt);
+        }
 
-        //if (!isStatic && system != null)
-        //{
-        //    Vector3 windAccel = system.wind;
-        //    foreach (var p in points)
-        //        p.velocity += windAccel * (p.invMass * dt);
-        //}
+        if (!isStatic && system != null)
+        {
+            Vector3 windAccel = system.wind;
+            foreach (var p in points)
+                p.velocity += windAccel * (p.invMass * dt);
+        }
         // Apply spring forces
         foreach (var spring in springs)
             spring.Apply(springStrength, dt);
